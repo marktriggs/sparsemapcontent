@@ -101,7 +101,7 @@
 			</Import-Package>
             <Private-Package>org.sakaiproject.nakamura.lite.*</Private-Package>
             <!-- For Oracle, include ojdbc in your Embed-Dependency element -->
-            <Embed-Dependency>libthrift,apache-cassandra,mysql-connector-java,derby,ojdbc</Embed-Dependency>
+            <Embed-Dependency>libthrift,apache-cassandra,mysql-connector-java,derby,oracle.jdbc</Embed-Dependency>
             <!-- <Embed-Dependency>libthrift,apache-cassandra,mysql-connector-java,derby</Embed-Dependency> -->
           </instructions>
         </configuration>
@@ -221,15 +221,15 @@
     repository and then uncomment the dependency below.
 
     mvn install:install-file -Dfile=path-to-your-ojdbc14-jar \
-                             -DgroupId=com.oracle \
-                             -DartifactId=ojdbc \
-                             -Dversion=1.4 \
+                             -DgroupId=oracle \
+                             -DartifactId=oracle.jdbc \
+                             -Dversion=0.1 \
                              -Dpackaging=jar
 -->
     <dependency>
-      <groupId>com.oracle</groupId>
-      <artifactId>ojdbc</artifactId>
-      <version>1.4</version>
+      <groupId>oracle</groupId>
+      <artifactId>oracle.jdbc</artifactId>
+      <version>0.1</version>
     </dependency>
 
     <dependency>
