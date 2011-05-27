@@ -59,6 +59,7 @@ import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.Permissions;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalTokenResolver;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.Security;
+import org.sakaiproject.nakamura.api.lite.authorizable.User;
 import org.sakaiproject.nakamura.api.lite.content.ActionRecord;
 import org.sakaiproject.nakamura.api.lite.content.Content;
 import org.sakaiproject.nakamura.api.lite.content.ContentManager;
@@ -322,20 +323,20 @@ public class ContentManagerImpl extends CachingManager implements ContentManager
             }
             toSave =  Maps.newHashMap(content.getPropertiesForUpdate());
             id = StorageClientUtils.getUuid();
-            toSave.put(UUID_FIELD, id);
-            toSave.put(PATH_FIELD, path);
-            toSave.put(CREATED_FIELD, System.currentTimeMillis());
-            toSave.put(CREATED_BY_FIELD,
+            putIfNotAdminOverride(toSave, UUID_FIELD, id);
+            putIfNotAdminOverride(toSave, PATH_FIELD, path);
+            putIfNotAdminOverride(toSave, CREATED_FIELD, System.currentTimeMillis());
+            putIfNotAdminOverride(toSave, CREATED_BY_FIELD,
                     accessControlManager.getCurrentUserId());
-            toSave.put(LASTMODIFIED_FIELD, System.currentTimeMillis());
-            toSave.put(LASTMODIFIED_BY_FIELD,
+            putIfNotAdminOverride(toSave, LASTMODIFIED_FIELD, System.currentTimeMillis());
+            putIfNotAdminOverride(toSave, LASTMODIFIED_BY_FIELD,
                     accessControlManager.getCurrentUserId());
             LOGGER.debug("New Content with {} {} ", id, toSave);
         } else if (content.isUpdated()) {
             toSave =  Maps.newHashMap(content.getPropertiesForUpdate());
             id = (String)toSave.get(UUID_FIELD);
-            toSave.put(LASTMODIFIED_FIELD, System.currentTimeMillis());
-            toSave.put(LASTMODIFIED_BY_FIELD,
+            putIfNotAdminOverride(toSave, LASTMODIFIED_FIELD, System.currentTimeMillis());
+            putIfNotAdminOverride(toSave, LASTMODIFIED_BY_FIELD,
                     accessControlManager.getCurrentUserId());
             LOGGER.debug("Updating Content with {} {} ", id, toSave);
         } else {
@@ -362,6 +363,15 @@ public class ContentManagerImpl extends CachingManager implements ContentManager
         content.reset(getCached(keySpace, contentColumnFamily, id));
         eventListener.onUpdate(Security.ZONE_CONTENT, path, accessControlManager.getCurrentUserId(), isnew, "op:update");        
     }
+
+    private void putIfNotAdminOverride(Map<String, Object> props, String key,
+        Object value) {
+      if(!props.containsKey(key) || !User.ADMIN_USER.equals(accessControlManager.getCurrentUserId())) {
+        props.put(key, value);
+      }
+
+    }
+
 
     public void delete(String path) throws AccessDeniedException, StorageClientException {
         checkOpen();
