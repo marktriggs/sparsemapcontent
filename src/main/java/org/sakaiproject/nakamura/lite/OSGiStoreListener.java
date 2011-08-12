@@ -18,6 +18,10 @@ import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.Map;
 
+/**
+ * When this {@link StoreListener} is notified of a storage action
+ * it posts an OSGi {@link Event} to the {@link EventAdmin}
+ */
 @Component(immediate = true, metatype = true)
 @Service
 public class OSGiStoreListener implements StoreListener {
@@ -60,15 +64,21 @@ public class OSGiStoreListener implements StoreListener {
 
     }
 
-    public void onDelete(String zone, String path, String user, String... attributes) {
+    /**
+     * {@inheritDoc}
+     */
+    public void onDelete(String zone, String path, String user, Map<String, Object> beforeEvent, String ... attributes) {
         String topic = DEFAULT_DELETE_TOPIC;
         if (deleteTopics.containsKey(zone)) {
             topic = deleteTopics.get(zone);
         }
-        postEvent(topic, path, user, attributes);
+        postEvent(topic, path, user, beforeEvent, attributes);
     }
 
-    public void onUpdate(String zone, String path, String user, boolean isNew, String... attributes) {
+    /**
+     * {@inheritDoc}
+     */
+    public void onUpdate(String zone, String path, String user, boolean isNew,  Map<String, Object> beforeEvent, String... attributes) {
 
         String topic = DEFAULT_UPDATE_TOPIC;
         if (isNew) {
@@ -82,19 +92,29 @@ public class OSGiStoreListener implements StoreListener {
             }
 
         }
-        postEvent(topic, path, user, attributes);
+        postEvent(topic, path, user, beforeEvent, attributes);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * No event is posted for these actions.
+     */
     public void onLogin(String userid, String sessionID) {
         LOGGER.debug("Login {} {} ", userid, sessionID);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * No event is posted for these actions.
+     */
     public void onLogout(String userid, String sessionID) {
         LOGGER.debug("Logout {} {} ", userid, sessionID);
     }
 
-    private void postEvent(String topic, String path, String user, String[] attributes) {
-        final Dictionary<String, String> properties = new Hashtable<String, String>();
+    private void postEvent(String topic, String path, String user,  Map<String, Object> beforeEvent, String[] attributes) {
+        final Dictionary<String, Object> properties = new Hashtable<String, Object>();
         if (attributes != null) {
             for (String attribute : attributes) {
                 String[] parts = StringUtils.split(attribute, ":", 2);
@@ -111,6 +131,9 @@ public class OSGiStoreListener implements StoreListener {
             properties.put(PATH_PROPERTY, path);
         }
         properties.put(USERID_PROPERTY, user);
+        if ( beforeEvent != null) {
+            properties.put(BEFORE_EVENT_PROPERTY, beforeEvent);
+        }
         eventAdmin.postEvent(new Event(topic, properties));
 
     }

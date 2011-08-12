@@ -21,22 +21,30 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.sakaiproject.nakamura.api.lite.ClientPoolException;
+import org.sakaiproject.nakamura.api.lite.Configuration;
 import org.sakaiproject.nakamura.api.lite.StorageClientException;
 import org.sakaiproject.nakamura.api.lite.StorageClientUtils;
+import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessControlManager;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AccessDeniedException;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.AclModification;
+import org.sakaiproject.nakamura.api.lite.accesscontrol.AclModification.Operation;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.Permission;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.Permissions;
+import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalTokenResolver;
+import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalValidatorPlugin;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.PrincipalValidatorResolver;
 import org.sakaiproject.nakamura.api.lite.accesscontrol.Security;
+import org.sakaiproject.nakamura.api.lite.authorizable.Authorizable;
 import org.sakaiproject.nakamura.api.lite.authorizable.Group;
 import org.sakaiproject.nakamura.api.lite.authorizable.User;
+import org.sakaiproject.nakamura.api.lite.content.Content;
 import org.sakaiproject.nakamura.lite.ConfigurationImpl;
 import org.sakaiproject.nakamura.lite.LoggingStorageListener;
 import org.sakaiproject.nakamura.lite.authorizable.AuthorizableActivator;
@@ -46,7 +54,9 @@ import org.sakaiproject.nakamura.lite.storage.StorageClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -61,22 +71,22 @@ public abstract class AbstractAccessControlManagerImplTest {
 
     @Before
     public void before() throws StorageClientException, AccessDeniedException, ClientPoolException,
-            ClassNotFoundException {
-        clientPool = getClientPool();
-        client = clientPool.getClient();
+            ClassNotFoundException, IOException {
         configuration = new ConfigurationImpl();
         Map<String, Object> properties = Maps.newHashMap();
         properties.put("keyspace", "n");
         properties.put("acl-column-family", "ac");
         properties.put("authorizable-column-family", "au");
         configuration.activate(properties);
+        clientPool = getClientPool(configuration);
+        client = clientPool.getClient();
         AuthorizableActivator authorizableActivator = new AuthorizableActivator(client,
                 configuration);
         authorizableActivator.setup();
         LOGGER.info("Setup Complete");
     }
 
-    protected abstract StorageClientPool getClientPool() throws ClassNotFoundException;
+    protected abstract StorageClientPool getClientPool(Configuration configuration) throws ClassNotFoundException;
 
     @After
     public void after() throws ClientPoolException {
@@ -93,12 +103,12 @@ public abstract class AbstractAccessControlManagerImplTest {
 
         AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
                 currentUser, configuration, null, new LoggingStorageListener(), principalValidatorResolver);
-        AclModification user1 = new AclModification(u1, Permissions.CAN_ANYTHING.combine(
+        AclModification user1 = new AclModification(AclModification.grantKey(u1), Permissions.CAN_ANYTHING.combine(
                 Permissions.CAN_ANYTHING_ACL).getPermission(), AclModification.Operation.OP_REPLACE);
-        AclModification user2 = new AclModification(u2, Permissions.CAN_READ
+        AclModification user2 = new AclModification(AclModification.grantKey(u2), Permissions.CAN_READ
                 .combine(Permissions.CAN_WRITE).combine(Permissions.CAN_DELETE).getPermission(),
                 AclModification.Operation.OP_REPLACE);
-        AclModification user3 = new AclModification(u3, Permissions.CAN_READ.getPermission(),
+        AclModification user3 = new AclModification(AclModification.grantKey(u3), Permissions.CAN_READ.getPermission(),
                 AclModification.Operation.OP_REPLACE);
         String basepath = "testpath"+System.currentTimeMillis();
 
@@ -109,12 +119,12 @@ public abstract class AbstractAccessControlManagerImplTest {
                 basepath);
         Assert.assertEquals(Integer.toHexString(Permissions.CAN_ANYTHING.combine(
                 Permissions.CAN_ANYTHING_ACL).getPermission()), Integer
-                .toHexString((Integer) acl.get(u1)));
+                .toHexString((Integer) acl.get(AclModification.grantKey(u1))));
         Assert.assertEquals(
                 Permissions.CAN_READ.combine(Permissions.CAN_WRITE).combine(Permissions.CAN_DELETE)
-                        .getPermission(), ((Integer)acl.get(u2)).intValue());
+                        .getPermission(), ((Integer)acl.get(AclModification.grantKey(u2))).intValue());
         Assert.assertEquals(Permissions.CAN_READ.getPermission(),
-                ((Integer)acl.get(u3)).intValue());
+                ((Integer)acl.get(AclModification.grantKey(u3))).intValue());
         for (Entry<String, Object> e : acl.entrySet()) {
             LOGGER.info(" ACE {} : {} ", e.getKey(), e.getValue());
         }
@@ -344,6 +354,120 @@ public abstract class AbstractAccessControlManagerImplTest {
 
     private String[] sortToArray(Set<String> keySet) {
         return Lists.sortedCopy(keySet).toArray(new String[keySet.size()]);
+    }
+    @Test
+    public void testTokenPermission() throws StorageClientException, AccessDeniedException {
+        AuthenticatorImpl authenticator = new AuthenticatorImpl(client, configuration);
+        User currentUser = authenticator.authenticate("admin", "admin");
+        String u3 = "user3-"+System.currentTimeMillis();
+
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
+                currentUser, configuration, null,  new LoggingStorageListener(), principalValidatorResolver);
+        AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser, client,
+            configuration, accessControlManagerImpl, null,  new LoggingStorageListener());
+        authorizableManager.createUser(u3, "User 3", "test",
+            ImmutableMap.of("test", (Object)"test"));
+        Authorizable user3Auth = authorizableManager.findAuthorizable(u3);
+        String targetContentPath = "targetContentPath"+System.currentTimeMillis();
+        int grantedBitmap = Permissions.CAN_WRITE.getPermission();
+        int deniedBitmap = Permissions.CAN_MANAGE.getPermission();
+        String aclID = Integer.toHexString(grantedBitmap)+"_"+Integer.toHexString(deniedBitmap);
+        String tokenPrincipal = AccessControlManager.DYNAMIC_PRINCIPAL_STEM + aclID;
+
+        // grant access to the token, but deny access to everyone else.
+        accessControlManagerImpl.setAcl(
+                Security.ZONE_CONTENT,
+                targetContentPath,
+                new AclModification[] {
+                    new AclModification(AclModification.denyKey(tokenPrincipal), deniedBitmap,
+                        Operation.OP_REPLACE),
+                    new AclModification(AclModification.grantKey(tokenPrincipal),
+                                grantedBitmap, Operation.OP_REPLACE),
+                      new AclModification(AclModification.denyKey(Group.EVERYONE), Permissions.CAN_READ.getPermission(),
+                                Operation.OP_REPLACE),
+                                new AclModification(AclModification.denyKey(User.ANON_USER), Permissions.CAN_READ.getPermission(),
+                                        Operation.OP_REPLACE)
+                            });
+        // the tokens should not be setup, 
+        final Content tokentContent = new Content("testtoken/"+tokenPrincipal, null);
+        accessControlManagerImpl.signContentToken(tokentContent, targetContentPath);
+        LOGGER.info("Checking Token {} ", tokentContent);
+        accessControlManagerImpl.setRequestPrincipalResolver(new PrincipalTokenResolver() {
+            public void resolveTokens(String principal, List<Content> tokens) {
+                tokens.add(tokentContent);
+                LOGGER.info("Principal {} checked tokens {}", principal, tokens);
+            }
+        });
+        Assert.assertTrue(accessControlManagerImpl.can(user3Auth, Security.ZONE_CONTENT, targetContentPath, Permissions.CAN_WRITE));
+        Assert.assertFalse(accessControlManagerImpl.can(user3Auth, Security.ZONE_CONTENT, targetContentPath, Permissions.CAN_READ));
+        Assert.assertFalse(accessControlManagerImpl.can(user3Auth, Security.ZONE_CONTENT, targetContentPath, Permissions.CAN_MANAGE));
+
+        accessControlManagerImpl.clearRequestPrincipalResolver();
+        LOGGER.info("Done Checking token");
+    }
+
+    @Test
+    public void testTokenPermissionWithPlugin() throws StorageClientException, AccessDeniedException {
+        AuthenticatorImpl authenticator = new AuthenticatorImpl(client, configuration);
+        User currentUser = authenticator.authenticate("admin", "admin");
+        String u3 = "user3-"+System.currentTimeMillis();
+
+        AccessControlManagerImpl accessControlManagerImpl = new AccessControlManagerImpl(client,
+                currentUser, configuration, null,  new LoggingStorageListener(), principalValidatorResolver);
+        AuthorizableManagerImpl authorizableManager = new AuthorizableManagerImpl(currentUser, client,
+            configuration, accessControlManagerImpl, null,  new LoggingStorageListener());
+        authorizableManager.createUser(u3, "User 3", "test",
+            ImmutableMap.of("test", (Object)"test"));
+        Authorizable user3Auth = authorizableManager.findAuthorizable(u3);
+        String targetContentPath = "targetContentPath"+System.currentTimeMillis();
+        int grantedBitmap = Permissions.CAN_WRITE.getPermission();
+        int deniedBitmap = Permissions.CAN_MANAGE.getPermission();
+        String aclID = Integer.toHexString(grantedBitmap)+"_"+Integer.toHexString(deniedBitmap);
+        String tokenPrincipal = AccessControlManager.DYNAMIC_PRINCIPAL_STEM + aclID;
+
+        // grant access to the token, but deny access to everyone else.
+        accessControlManagerImpl.setAcl(
+                Security.ZONE_CONTENT,
+                targetContentPath,
+                new AclModification[] {
+                    new AclModification(AclModification.denyKey(tokenPrincipal), deniedBitmap,
+                                Operation.OP_REPLACE),
+                    new AclModification(AclModification.grantKey(tokenPrincipal),
+                        grantedBitmap, Operation.OP_REPLACE),
+                    new AclModification(AclModification.denyKey(Group.EVERYONE), Permissions.CAN_READ.getPermission(),
+                                Operation.OP_REPLACE),
+                                new AclModification(AclModification.denyKey(User.ANON_USER), Permissions.CAN_READ.getPermission(),
+                                        Operation.OP_REPLACE)
+                            });
+        // the tokens should not be setup,
+        final Set<Content> checked = Sets.newHashSet();
+        principalValidatorResolver.registerPlugin("testvalidator", new PrincipalValidatorPlugin() {
+            public boolean validate(Content proxyPrincipalToken) {
+                checked.add(proxyPrincipalToken);
+                return proxyPrincipalToken.hasProperty("protectedfield");
+            }
+            public String[] getProtectedFields() {
+                return new String[]{"protectedfield", "nullprotectedfield"} ;
+            }
+        });
+        final Content tokentContent = new Content("testtokenwithPlugin/"+tokenPrincipal, ImmutableMap.of(PrincipalTokenValidator.VALIDATORPLUGIN, (Object)"testvalidator", "protectedfield", "protected"));
+        accessControlManagerImpl.signContentToken(tokentContent, targetContentPath);
+        LOGGER.info("Checking Token {} ", tokentContent);
+        accessControlManagerImpl.setRequestPrincipalResolver(new PrincipalTokenResolver() {
+            public void resolveTokens(String principal, List<Content> tokens) {
+                tokens.add(tokentContent);
+                LOGGER.info("Principal {} checked tokens {}", principal, tokens);
+            }
+        });
+        Assert.assertTrue(accessControlManagerImpl.can(user3Auth, Security.ZONE_CONTENT, targetContentPath, Permissions.CAN_WRITE));
+        Assert.assertFalse(accessControlManagerImpl.can(user3Auth, Security.ZONE_CONTENT, targetContentPath, Permissions.CAN_READ));
+        Assert.assertFalse(accessControlManagerImpl.can(user3Auth, Security.ZONE_CONTENT, targetContentPath, Permissions.CAN_MANAGE));
+
+        Assert.assertEquals(1, checked.size());
+        accessControlManagerImpl.clearRequestPrincipalResolver();
+        LOGGER.info("Done Checking token");
+        principalValidatorResolver.unregisterPlugin("testvalidator");
+
     }
 
 }
