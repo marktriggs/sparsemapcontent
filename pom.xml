@@ -85,11 +85,13 @@
         <extensions>true</extensions>
         <configuration>
           <instructions>
-            <Bundle-Category>sakai-nakamura</Bundle-Category>
+            <Bundle-Category>sparsemapcontent</Bundle-Category>
+            <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
             <Export-Package>
               org.sakaiproject.nakamura.api.lite.*
 			</Export-Package>
 			<DynamicImport-Package>*</DynamicImport-Package>
+               
 			<Import-Package>
 			   !org.apache.xpath.*,
 			   !org.apache.xalan.*,
@@ -268,7 +270,7 @@
     <dependency>
 	  <groupId>org.apache.hbase</groupId>
 	  <artifactId>hbase</artifactId>
-	  <version>0.90.3</version>
+	  <version>0.90.3</version>    
           <scope>provided</scope>
     </dependency>
 <!--
