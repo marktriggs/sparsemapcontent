@@ -96,6 +96,9 @@
 			   !org.apache.xalan.*,
 			   !org.apache.xml.utils.*,
 			   !org.apache.derby.impl.drda.*,
+                           !com.mchange.v2.c3p0,
+                           !org.jboss.resource.adapter.jdbc,
+                           !org.jboss.resource.adapter.jdbc.*,
 			   org.apache.cassandra.thrift;resolution:=optional,
 			   org.apache.thrift;resolution:=optional,
 			   org.apache.thrift.protocol;resolution:=optional,
@@ -114,7 +117,7 @@
             <!-- <Embed-Dependency>libthrift,apache-cassandra,mysql-connector-java,derby,ojdbc</Embed-Dependency> -->
             <!--  <Embed-Dependency>libthrift,apache-cassandra,mysql-connector-java,derby</Embed-Dependency> -->
             <!--  Only embed Derby, the other Jars must be provided as seperate bundles -->
-            <Embed-Dependency>derby,ojdbc</Embed-Dependency>
+            <Embed-Dependency>derby,ojdbc,mysql-connector-java</Embed-Dependency>
           </instructions>
         </configuration>
       </plugin>
