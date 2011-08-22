@@ -50,6 +50,7 @@ import org.sakaiproject.nakamura.lite.content.BlockSetContentHelper;
 import org.sakaiproject.nakamura.lite.storage.Disposable;
 import org.sakaiproject.nakamura.lite.storage.DisposableIterator;
 import org.sakaiproject.nakamura.lite.storage.Disposer;
+import org.sakaiproject.nakamura.lite.storage.SparseRow;
 import org.sakaiproject.nakamura.lite.storage.StorageClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -488,6 +489,11 @@ public class CassandraClient extends Client implements StorageClient {
       for (Disposable d : toDispose) {
           d.close();
       }
-  }  
+  }
+
+    public DisposableIterator<SparseRow> listAll(String keySpace, String columnFamily) {
+        // TODO Auto-generated method stub
+        return null;
+    }  
     
 }
