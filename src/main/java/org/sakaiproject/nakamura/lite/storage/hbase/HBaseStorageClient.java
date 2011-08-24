@@ -35,6 +35,7 @@ import org.sakaiproject.nakamura.lite.content.BlockSetContentHelper;
 import org.sakaiproject.nakamura.lite.storage.Disposable;
 import org.sakaiproject.nakamura.lite.storage.DisposableIterator;
 import org.sakaiproject.nakamura.lite.storage.Disposer;
+import org.sakaiproject.nakamura.lite.storage.SparseRow;
 import org.sakaiproject.nakamura.lite.storage.StorageClient;
 import org.sakaiproject.nakamura.lite.types.Types;
 import org.sakaiproject.nakamura.api.lite.RemoveProperty;
@@ -454,5 +455,15 @@ public class HBaseStorageClient implements StorageClient {
       d.close();
     }
   }
+
+public DisposableIterator<SparseRow> listAll(String keySpace, String columnFamily) {
+    // TODO Auto-generated method stub
+    return null;
+}
+
+public long allCount(String keySpace, String columnFamily) {
+    // TODO Auto-generated method stub
+    return 0;
+}
 
 }
