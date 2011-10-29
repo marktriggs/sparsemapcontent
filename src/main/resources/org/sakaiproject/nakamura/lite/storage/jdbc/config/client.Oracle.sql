@@ -39,6 +39,16 @@ block-update-row = update css_b set b = ? where rid = ?
 list-all = select rid, b from css_b
 list-all-count = select count(*) from css_b
 
+select-row-descendants = select rid, b from css_b where rid in (select rid from css start with rid = ? connect by cid = '_:parenthash' AND prior rid = v)
+select-row-descendants.n.au = select rid, b from au_css_b where rid in (select rid from au_css start with rid = ? connect by cid = '_:parenthash' AND prior rid = v)
+select-row-descendants.n.cn = select rid, b from cn_css_b where rid in (select rid from cn_css start with rid = ? connect by cid = '_:parenthash' AND prior rid = v)
+select-row-descendants.n.ac = select rid, b from ac_css_b where rid in (select rid from ac_css start with rid = ? connect by cid = '_:parenthash' AND prior rid = v)
+
+select-multiple-blobs = select rid, b from cn_css_b where rid in ({0})
+select-multiple-blobs.n.au = select rid, b from au_css_b where rid in ({0})
+select-multiple-blobs.n.cn = select rid, b from cn_css_b where rid in ({0})
+select-multiple-blobs.n.ac = select rid, b from ac_css_b where rid in ({0})
+
 block-select-row.n.ac = select b from ac_css_b where rid = ?
 block-delete-row.n.ac = delete from ac_css_b where rid = ?
 block-insert-row.n.ac = insert into ac_css_b (rid,b) values (?, ?)

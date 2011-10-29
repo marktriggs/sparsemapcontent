@@ -319,6 +319,12 @@ public class MemoryStorageClient implements StorageClient {
         };
     }
 
+    public DisposableIterator<SparseRow> listDescendants(String keySpace, String columnFamily, String key)
+      throws StorageClientException {
+      return null;
+    }
+
+
     public long allCount(String keySpace, String columnFamily) {
         long count = 0;
         DisposableIterator<SparseRow> allRows = listAll(keySpace, columnFamily);

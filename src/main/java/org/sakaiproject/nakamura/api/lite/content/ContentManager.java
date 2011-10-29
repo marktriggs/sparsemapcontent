@@ -343,6 +343,10 @@ public interface ContentManager {
      */
     Iterator<Content> listChildren(String path) throws StorageClientException;
 
+
+    Iterator<Content> listDescendants(String path) throws StorageClientException, AccessDeniedException;
+
+
     /**
      * @param path the path of the content node
      * @param streamId the stream id, null for the default stream

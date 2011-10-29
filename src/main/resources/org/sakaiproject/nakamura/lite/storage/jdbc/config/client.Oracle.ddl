@@ -30,6 +30,7 @@ CREATE SEQUENCE seq_au_css_id;
 
 CREATE INDEX au_css_rowkey ON au_css(rid,cid);
 CREATE INDEX au_css_cid_locate_i ON au_css(v,cid);
+CREATE INDEX au_css_rid_i on au_css(v,rid);
 
 ######### DROP TABLE cn_css;
 
@@ -45,6 +46,8 @@ CREATE SEQUENCE seq_cn_css_id;
 
 CREATE INDEX cn_css_rowkey ON cn_css(rid,cid);
 CREATE INDEX cn_css_cid_locate_i ON cn_css(v,cid);
+CREATE INDEX cn_css_rid_i on cn_css(v,rid);
+
 
 ########### DROP TABLE ac_css;
 
@@ -60,6 +63,7 @@ CREATE SEQUENCE seq_ac_css_id;
 
 CREATE INDEX ac_css_rowkey ON ac_css(rid,cid);
 CREATE INDEX ac_css_cid_locate_i ON ac_css(v,cid);
+CREATE INDEX ac_css_rid_i on ac_css(v,rid);
 
 ########### DROP TABLE css_b;
 

@@ -137,6 +137,15 @@ public interface StorageClient {
      */
     DisposableIterator<SparseRow> listAll(String keySpace, String columnFamily) throws StorageClientException;
 
+
+    /**
+     * List all children, grandchildren, ..., objects of a certain node.
+     * Implementing this method is optional: return null to indicate that this method isn't implemented.
+     */
+    public DisposableIterator<SparseRow> listDescendants(String keySpace, String columnFamily, String key)
+      throws StorageClientException;
+
+
     /**
      * Count all the objects in a column Family.
      * @param keySpace

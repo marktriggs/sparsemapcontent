@@ -28,11 +28,13 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.List;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -80,6 +82,8 @@ public class JDBCStorageClient implements StorageClient, RowHasher, Disposer {
     private static final String SQL_VALIDATE = "validate";
     private static final String SQL_CHECKSCHEMA = "check-schema";
     private static final String SQL_COMMENT = "#";
+    private static final String SQL_PARAMETER_MARKER = "?";
+    private static final String SQL_LIST_DELIMITER = ",";
     private static final String SQL_EOL = ";";
     public static final String SQL_INDEX_COLUMN_NAME_SELECT = "index-column-name-select";
     private static final String SQL_INDEX_COLUMN_NAME_INSERT = "index-column-name-insert";
@@ -91,6 +95,9 @@ public class JDBCStorageClient implements StorageClient, RowHasher, Disposer {
     static final String SQL_BLOCK_SELECT_ROW = "block-select-row";
     static final String SQL_BLOCK_INSERT_ROW = "block-insert-row";
     static final String SQL_BLOCK_UPDATE_ROW = "block-update-row";
+
+    static final String SQL_SELECT_ROW_DESCENDANTS = "select-row-descendants";
+    static final String SQL_SELECT_MULTIPLE_BLOBS = "select-multiple-blobs";
 
     private static final String PROP_HASH_ALG = "rowid-hash";
     private static final String USE_BATCH_INSERTS = "use-batch-inserts";
@@ -186,6 +193,7 @@ public class JDBCStorageClient implements StorageClient, RowHasher, Disposer {
             selectStringRow.clearWarnings();
             selectStringRow.clearParameters();
             selectStringRow.setString(1, rid);
+
             body = selectStringRow.executeQuery();
             inc("B");
             if (body.next()) {
@@ -217,6 +225,8 @@ public class JDBCStorageClient implements StorageClient, RowHasher, Disposer {
         }
         return result;
     }
+
+
 
     public String rowHash(String keySpace, String columnFamily, String key)
             throws StorageClientException {
@@ -757,7 +767,128 @@ public class JDBCStorageClient implements StorageClient, RowHasher, Disposer {
 
     }
 
-    
+    public DisposableIterator<SparseRow> listDescendants(String keySpace, String columnFamily, String key)
+            throws StorageClientException {
+        checkClosed();
+        String rid = rowHash(keySpace, columnFamily, key);
+        return internalListDescendants(keySpace, columnFamily, rid);
+    }
+
+    public DisposableIterator<SparseRow> internalListDescendants(final String keySpace, final String columnFamily, String parentRid)
+            throws StorageClientException {
+      try {
+        PreparedStatement selectDescendants = getStatement(keySpace, columnFamily, SQL_SELECT_ROW_DESCENDANTS, parentRid, null);
+
+        if (selectDescendants != null) {
+          selectDescendants.clearWarnings();
+          selectDescendants.clearParameters();
+          selectDescendants.setString(1, parentRid);
+
+          ResultSet rs = selectDescendants.executeQuery();
+          final LinkedList<String> rids = new LinkedList<String>();
+
+          while (rs.next()) {
+            Map<String, Object> values = Maps.newHashMap();
+            String rid = rs.getString(1);
+            try {
+              Types.loadFromStream(rid, values, rs.getBinaryStream(2), columnFamily);
+            } catch (IOException e) {
+              throw new StorageClientException(e.getMessage(), e);
+            }
+            rids.add(rowHash(keySpace, columnFamily, (String)values.get(InternalContent.STRUCTURE_UUID_FIELD)));
+          }
+
+          rs.close();
+          selectDescendants.close();
+
+          return registerDisposable(new PreemptiveIterator<SparseRow>() {
+
+              private int bufferSize = 30;
+              private LinkedList<SparseRow> bufferedValues = new LinkedList<SparseRow>();
+              private boolean open = true;
+
+
+              @Override
+              protected SparseRow internalNext() {
+                return bufferedValues.removeFirst();
+              }
+
+              @Override
+              protected boolean internalHasNext() {
+                if (!open) {
+                  return false;
+                }
+
+                if (!bufferedValues.isEmpty()) {
+                  return true;
+                }
+
+                if (!rids.isEmpty()) {
+                  try {
+                    refillBuffer();
+                  } catch (SQLException e) {
+                    LOGGER.error(e.getMessage(), e);
+                    return false;
+                  } catch (IOException e) {
+                    LOGGER.error(e.getMessage(), e);
+                    return false;
+                  }
+                  return internalHasNext();
+                } else {
+                  return false;
+                }
+              }
+
+
+              private void refillBuffer() throws SQLException, IOException {
+                String sql = getSql(SQL_SELECT_MULTIPLE_BLOBS + "." + keySpace + "." + columnFamily);
+
+                int count = Math.min(bufferSize, rids.size());
+
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < count; i++) {
+                  sb.append(SQL_PARAMETER_MARKER);
+
+                  if (i < (count - 1)) {
+                    sb.append(SQL_LIST_DELIMITER);
+                  }
+                }
+
+                sql = MessageFormat.format(sql, sb.toString());
+                PreparedStatement pst = jcbcStorageClientConnection.getConnection().prepareStatement(sql);
+
+                for (int i = 0; i < count; i++) {
+                  String rid = rids.removeFirst();
+                  pst.setString(i + 1, rid);
+                }
+
+                ResultSet rs = pst.executeQuery();
+
+                while (rs.next()) {
+                  Map<String, Object> values = Maps.newHashMap();
+                  String rid = rs.getString(1);
+                  Types.loadFromStream(rid, values, rs.getBinaryStream(2), columnFamily);
+                  bufferedValues.add(new SparseMapRow(rid, values));
+                }
+
+                rs.close();
+              }
+
+              @Override
+              public void close() {
+                super.close();
+              }
+            });
+        } else {
+          return null;
+        }
+      } catch (SQLException e) {
+        LOGGER.error(e.getMessage(), e);
+        throw new StorageClientException(e.getMessage(), e);
+      }
+    }
+
+
     public DisposableIterator<SparseRow> listAll(String keySpace, final String columnFamily) throws StorageClientException {
         String[] keys = new String[] { "list-all." + keySpace + "." + columnFamily,
                 "list-all." + columnFamily, "list-all" };     

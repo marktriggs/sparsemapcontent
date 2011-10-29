@@ -496,6 +496,12 @@ public class CassandraClient extends Client implements StorageClient {
         return null;
     }
 
+    public DisposableIterator<SparseRow> listDescendants(String keySpace, String columnFamily, String key)
+      throws StorageClientException {
+      return null;
+    }
+
+
     public long allCount(String keySpace, String columnFamily) {
         // TODO Auto-generated method stub
         return 0;

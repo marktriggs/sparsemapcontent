@@ -47,6 +47,7 @@ import java.io.InputStream;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -281,6 +282,7 @@ public class ContentManagerImpl extends CachingManager implements ContentManager
         };
     }
 
+
     public Iterator<String> listChildPaths(final String path) throws StorageClientException {
         final Iterator<Map<String, Object>> childContent = client.listChildren(keySpace,
                 contentColumnFamily, path);
@@ -323,6 +325,71 @@ public class ContentManagerImpl extends CachingManager implements ContentManager
         };
     }
     
+
+    public Iterator<Content> listDescendants(String path) throws StorageClientException, AccessDeniedException {
+        final DisposableIterator<SparseRow> descendants = client.listDescendants(keySpace,
+                contentColumnFamily, path);
+
+        if (descendants != null) {
+          return (new PreemptiveIterator<Content>() {
+              @Override
+              protected boolean internalHasNext() {
+                return descendants.hasNext();
+              }
+
+              @Override
+              protected Content internalNext() {
+                SparseRow next = descendants.next();
+                Map<String,Object> properties = next.getProperties();
+                return new Content((String)properties.get(InternalContent.PATH_FIELD),
+                                   properties);
+              }
+
+              @Override
+              public void close() {
+                descendants.close();
+                super.close();
+              };
+            });
+        } else {
+          final LinkedList<Content> queue = new LinkedList<Content>();
+          Content parent = get(path);
+          if (parent != null) {
+            queue.add(get(path));
+          }
+
+          return (new PreemptiveIterator<Content>() {
+
+              @Override
+              protected boolean internalHasNext() {
+                return !queue.isEmpty();
+              }
+
+              @Override
+              protected Content internalNext() {
+                Content next = queue.removeFirst();
+
+                try {
+                  Iterator<Content> it = listChildren(next.getPath());
+                  while (it.hasNext()) {
+                    queue.add(it.next());
+                  }
+                } catch (StorageClientException e) {
+                  LOGGER.debug(e.getMessage(),e);
+                }
+
+                return next;
+              }
+
+              @Override
+              public void close() {
+                super.close();
+              };
+            });
+        }
+    }
+
+
     public void triggerRefresh(String path) throws StorageClientException, AccessDeniedException {
         Content c = get(path);
         if ( c != null ) {
