@@ -99,6 +99,16 @@ public class ConnectionManager extends TimerTask {
         }
     }
 
+    public void ping() {
+        Thread t = Thread.currentThread();
+        ConnectionHolder c = threadMap.get(t);
+
+        if (c != null) {
+            c.ping();
+        }
+    }
+
+
     public void close() {
         closing = true;
         while (threadMap.size() > 0) {
