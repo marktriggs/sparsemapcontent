@@ -374,6 +374,9 @@ public class JDBCStorageClientPool extends AbstractClientConnectionPool {
     }
 
 
+    public void ping() {
+        connectionManager.ping();
+    }
 
 
     public String getValidationSql() {
